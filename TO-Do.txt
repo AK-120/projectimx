@@ -1,0 +1,4 @@
+*add time resitriton in scannerpage 
+*add leave in sunday and saterday
+*add branch filter and sem filter 
+*add name filter with sepfitic month
