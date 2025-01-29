@@ -7,10 +7,9 @@ class UserListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('Users'),
-        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back),
           onPressed: () {
             Navigator.pop(context); // Navigate back to the previous screen
           },

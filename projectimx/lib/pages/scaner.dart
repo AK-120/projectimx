@@ -50,7 +50,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     setState(() {
       isLoading = false;
-    });
+    });   
 
     // Start face detection automatically
     _startFaceDetection();

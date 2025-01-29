@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -12,173 +13,239 @@ class AttendanceReportPage extends StatefulWidget {
 }
 
 class _AttendanceReportPageState extends State<AttendanceReportPage> {
-  final TextEditingController _monthController =
-      TextEditingController(); // Input: Year-Month
-  final TextEditingController _workingDaysController =
-      TextEditingController(); // Input: Working days
+  final TextEditingController _monthController = TextEditingController();
+  final TextEditingController _workingDaysController = TextEditingController();
   String _selectedDepartment = "Computer Engineering";
-  String _selectedSemester = "S6";
+  String _selectedSemester = "Sem 6";
+  DateTime selectedMonth = DateTime.now();
+
+  List<Map<String, dynamic>> _allUsers = [];
+  List<Map<String, dynamic>> _allAttendance = [];
   List<Map<String, dynamic>> _attendanceData = [];
+  List<String> holidayList = []; // Populate this list with Firebase data.
 
-  Future<void> _fetchAttendanceData(int workingDays, String monthYear) async {
-    List<Map<String, dynamic>> attendanceData = [];
+  @override
+  void initState() {
+    super.initState();
+    _fetchInitialData(); // Load all data at the start.
+  }
+
+  Future<void> _fetchInitialData() async {
     try {
-      final userSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('department', isEqualTo: _selectedDepartment)
-          .where('semester', isEqualTo: _selectedSemester)
-          .get();
+      // Fetch all users
+      final userSnapshot =
+          await FirebaseFirestore.instance.collection('users').get();
+      _allUsers = userSnapshot.docs.map((doc) => doc.data()).toList();
 
-      for (var userDoc in userSnapshot.docs) {
-        final userId = userDoc['id'];
-        final userName = userDoc['name'];
+      // Fetch all attendance records
+      final attendanceSnapshot =
+          await FirebaseFirestore.instance.collection('attendance').get();
+      _allAttendance =
+          attendanceSnapshot.docs.map((doc) => doc.data()).toList();
 
-        // Fetch attendance for the given month and year
-        final attendanceSnapshot = await FirebaseFirestore.instance
-            .collection('attendance')
-            .where('id', isEqualTo: userId)
-            .where('date', isGreaterThanOrEqualTo: "$monthYear-01")
-            .where('date', isLessThanOrEqualTo: "$monthYear-31")
-            .get();
+      // Fetch holidays (optional)
+      final holidaySnapshot =
+          await FirebaseFirestore.instance.collection('holidays').get();
+      holidayList =
+          holidaySnapshot.docs.map((doc) => doc['date'] as String).toList();
 
-        int daysPresent = attendanceSnapshot.docs.length;
-        int totalAttendance = await FirebaseFirestore.instance
-            .collection('attendance')
-            .where('id', isEqualTo: userId)
-            .get()
-            .then((snapshot) => snapshot.docs.length);
+      setState(() {});
+    } catch (e) {
+      print("Error fetching data: $e");
+    }
+  }
 
-        double percentage = (daysPresent / workingDays) * 100;
+  List<String> _getWorkingDays(DateTime month) {
+    DateTime firstDayOfMonth = DateTime(month.year, month.month, 1);
+    DateTime lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
+
+    List<String> workingDays = [];
+    DateTime currentDate = firstDayOfMonth;
+
+    while (currentDate.isBefore(lastDayOfMonth) ||
+        currentDate.isAtSameMomentAs(lastDayOfMonth)) {
+      if (currentDate.weekday != DateTime.saturday &&
+          currentDate.weekday != DateTime.sunday &&
+          !holidayList.contains(DateFormat('yyyy-MM-dd').format(currentDate))) {
+        workingDays.add(DateFormat('yyyy-MM-dd').format(currentDate));
+      }
+      currentDate = currentDate.add(Duration(days: 1));
+    }
+
+    return workingDays;
+  }
+
+  Future<void> _calculateAttendance() async {
+    if (_allUsers.isEmpty || _allAttendance.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("No data available.")),
+      );
+      return;
+    }
+
+    final workingDays = _getWorkingDays(selectedMonth);
+    final workingDaysCount = workingDays.length;
+
+    List<Map<String, dynamic>> attendanceData = [];
+
+    for (var user in _allUsers) {
+      if (user['department'] == _selectedDepartment &&
+          user['semester'] == _selectedSemester) {
+        final userId = user['id'];
+        final userName = user['name'];
+
+        // Filter attendance for this user and the selected month
+        final userAttendance = _allAttendance.where((record) {
+          return record['id'] == userId && workingDays.contains(record['date']);
+        }).toList();
+
+        final daysPresent = userAttendance.length;
+        final percentage =
+            workingDaysCount > 0 ? (daysPresent / workingDaysCount) * 100 : 0;
 
         attendanceData.add({
           'id': userId,
           'name': userName,
           'monthAttendance': daysPresent,
-          'totalAttendance': totalAttendance,
-          'monthPercentage': percentage.toStringAsFixed(2),
+          'totalWorkingDays': workingDaysCount,
+          'attendancePercentage': percentage.toStringAsFixed(2),
         });
-      }
+        Future<void> _calculateAttendance() async {
+          if (_allUsers.isEmpty || _allAttendance.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("No data available.")),
+            );
+            return;
+          }
 
-      setState(() {
-        _attendanceData = attendanceData;
-      });
-    } catch (e) {
-      print('Error fetching attendance data: $e');
+          // Get working days for the selected month
+          final workingDays = _getWorkingDays(selectedMonth);
+          final workingDaysCount = workingDays.length;
+
+          if (workingDaysCount == 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content:
+                      Text("No working days found for the selected month.")),
+            );
+            return;
+          }
+
+          List<Map<String, dynamic>> attendanceData = [];
+
+          for (var user in _allUsers) {
+            if (user['department'] == _selectedDepartment &&
+                user['semester'] == _selectedSemester) {
+              final userId = user['id'];
+              final userName = user['name'];
+
+              // Filter attendance records for this user and the selected month
+              final userAttendance = _allAttendance.where((record) {
+                // Extract and validate the `date` field
+                final recordDateString = record['date'] ?? '';
+                return record['id'] == userId &&
+                    workingDays.contains(recordDateString);
+              }).toList();
+
+              // Calculate attendance stats
+              final daysPresent = userAttendance.length;
+              final attendancePercentage = workingDaysCount > 0
+                  ? (daysPresent / workingDaysCount) * 100
+                  : 0;
+
+              attendanceData.add({
+                'id': userId,
+                'name': userName,
+                'monthAttendance': daysPresent,
+                'totalWorkingDays': workingDaysCount,
+                'attendancePercentage': attendancePercentage.toStringAsFixed(2),
+              });
+            }
+          }
+
+          setState(() {
+            _attendanceData = attendanceData;
+          });
+
+          // Debugging: Print calculated attendance data
+          print('Attendance Data: $_attendanceData');
+        }
+      }
     }
+
+    setState(() {
+      _attendanceData = attendanceData;
+    });
   }
 
-  Future<void> _downloadPDF() async {
+  Future<void> _generatePDF() async {
     final pdf = pw.Document();
 
-    // Parse the month and year from input
-    final monthYearInput = _monthController.text; // e.g., "2024-12"
-    final parts = monthYearInput.split('-');
-    final year = parts[0];
-    final month = parts[1];
-
-    // Map month numbers to names
-    final monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    final monthName = monthNames[int.parse(month) - 1];
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                'ATTENDANCE STATEMENT FOR THE MONTH OF $monthName $year',
-                style:
-                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text('Programme: $_selectedDepartment'),
-              pw.Text('Semester: $_selectedSemester'),
-              pw.Text(
-                  'No. of working days in $monthName $year: ${_workingDaysController.text}'),
-              pw.SizedBox(height: 20),
-              pw.Table.fromTextArray(
-                headers: [
-                  'Adm. No.',
-                  'Name',
-                  '$monthName $year',
-                  'Total Attended',
-                  'Attendance %'
-                ],
-                data: _attendanceData.map((data) {
-                  return [
-                    data['id'],
-                    data['name'],
-                    data['monthAttendance'],
-                    data['totalAttendance'],
-                    '${data['monthPercentage']}%',
-                  ];
-                }).toList(),
-              ),
+    pdf.addPage(pw.Page(build: (pw.Context context) {
+      return pw.Column(
+        children: [
+          pw.Text(
+              'Attendance Report for $_selectedDepartment ($_selectedSemester)'),
+          pw.Table.fromTextArray(
+            headers: [
+              'Name',
+              'ID',
+              'Days Present',
+              'Total Working Days',
+              'Attendance Percentage'
             ],
-          );
-        },
-      ),
+            data: _attendanceData.map((data) {
+              return [
+                data['name'],
+                data['id'],
+                data['monthAttendance'],
+                data['totalWorkingDays'],
+                data['attendancePercentage'],
+              ];
+            }).toList(),
+          ),
+        ],
+      );
+    }));
+
+    final outputDir = await getExternalStorageDirectory();
+    final file = File("${outputDir!.path}/attendance_report.pdf");
+    await file.writeAsBytes(await pdf.save());
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("PDF saved to ${file.path}")),
+    );
+  }
+
+  Future<void> pickMonth(BuildContext context) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime(selectedMonth.year, selectedMonth.month, 1),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      selectableDayPredicate: (day) =>
+          day.day == 1 && day.isBefore(DateTime.now().add(Duration(days: 1))),
     );
 
-    try {
-      String? outputDir = await FilePicker.platform.getDirectoryPath();
-      if (outputDir == null) return;
-
-      final path =
-          '$outputDir/attendance_report_${monthName.toLowerCase()}_$year.pdf';
-      final file = File(path);
-      await file.writeAsBytes(await pdf.save());
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF saved to $path')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error downloading PDF: $e')),
-      );
+    if (pickedDate != null) {
+      setState(() {
+        selectedMonth = DateTime(pickedDate.year, pickedDate.month);
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Generate Attendance Report'),
-      ),
+      appBar: AppBar(title: Text('Attendance Report')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            TextField(
-              controller: _monthController,
-              keyboardType: TextInputType.text,
-              decoration: InputDecoration(
-                labelText: 'Enter Month and Year (YYYY-MM)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            SizedBox(height: 16),
-            TextField(
-              controller: _workingDaysController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Enter Working Days',
-                border: OutlineInputBorder(),
+            ElevatedButton(
+              onPressed: () => pickMonth(context),
+              child: Text(
+                'Select Month: ${DateFormat('MMMM yyyy').format(selectedMonth)}',
               ),
             ),
             SizedBox(height: 16),
@@ -222,14 +289,9 @@ class _AttendanceReportPageState extends State<AttendanceReportPage> {
                 });
               },
             ),
-            SizedBox(height: 20),
+            SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () async {
-                final workingDays =
-                    int.tryParse(_workingDaysController.text) ?? 30;
-                final monthYear = _monthController.text;
-                await _fetchAttendanceData(workingDays, monthYear);
-              },
+              onPressed: _calculateAttendance,
               child: Text('Calculate Attendance'),
             ),
             SizedBox(height: 20),
@@ -241,8 +303,8 @@ class _AttendanceReportPageState extends State<AttendanceReportPage> {
                         final data = _attendanceData[index];
                         return ListTile(
                           title: Text('${data['name']} (${data['id']})'),
-                          subtitle:
-                              Text('Attendance: ${data['monthPercentage']}%'),
+                          subtitle: Text(
+                              'Attendance: ${data['attendancePercentage']}%'),
                         );
                       },
                     ),
@@ -250,7 +312,7 @@ class _AttendanceReportPageState extends State<AttendanceReportPage> {
                 : Text('No attendance data available.'),
             SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _attendanceData.isNotEmpty ? _downloadPDF : null,
+              onPressed: _attendanceData.isNotEmpty ? _generatePDF : null,
               child: Text('Download PDF'),
             ),
           ],

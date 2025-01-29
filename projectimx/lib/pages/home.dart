@@ -97,14 +97,24 @@ class _ScanScreenState extends State<HomeScreen> {
     String checkOutStart = _timeRestrictions['morning_check_out_start'] ?? '';
     String checkOutEnd = _timeRestrictions['morning_check_out_end'] ?? '';
 
-    if (formattedTime.compareTo(checkInStart) >= 0 &&
-        formattedTime.compareTo(checkInEnd) <= 0) {
-      return true; // Morning check-in allowed
-    }
+    String afternoonCheckInStart =
+        _timeRestrictions['afternoon_check_in_start'] ?? '';
+    String afternoonCheckInEnd =
+        _timeRestrictions['afternoon_check_in_end'] ?? '';
+    String afternoonCheckOutStart =
+        _timeRestrictions['afternoon_check_out_start'] ?? '';
+    String afternoonCheckOutEnd =
+        _timeRestrictions['afternoon_check_out_end'] ?? '';
 
-    if (formattedTime.compareTo(checkOutStart) >= 0 &&
-        formattedTime.compareTo(checkOutEnd) <= 0) {
-      return true; // Morning check-out allowed
+    if ((formattedTime.compareTo(checkInStart) >= 0 &&
+            formattedTime.compareTo(checkInEnd) <= 0) ||
+        (formattedTime.compareTo(checkOutStart) >= 0 &&
+            formattedTime.compareTo(checkOutEnd) <= 0) ||
+        (formattedTime.compareTo(afternoonCheckInStart) >= 0 &&
+            formattedTime.compareTo(afternoonCheckInEnd) <= 0) ||
+        (formattedTime.compareTo(afternoonCheckOutStart) >= 0 &&
+            formattedTime.compareTo(afternoonCheckOutEnd) <= 0)) {
+      return true;
     }
 
     return false; // Not within time limits
@@ -172,7 +182,6 @@ class _ScanScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Set the background color
       body: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -192,7 +201,6 @@ class _ScanScreenState extends State<HomeScreen> {
               _dateString, // Dynamic date
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.black54,
               ),
             ),
             SizedBox(height: 40), // Space before scan icon
@@ -205,7 +213,8 @@ class _ScanScreenState extends State<HomeScreen> {
                   Icon(
                     Icons.camera_alt_outlined,
                     size: 100,
-                    color: Colors.grey[400], // Light grey color for icon
+                    color: const Color.fromARGB(
+                        255, 0, 208, 255), // Light grey color for icon
                   ),
                   SizedBox(height: 8), // Space between icon and text
                   Text(
@@ -213,7 +222,6 @@ class _ScanScreenState extends State<HomeScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black,
                     ),
                   ),
                 ],
@@ -233,7 +241,6 @@ class _ScanScreenState extends State<HomeScreen> {
                   child: Icon(
                     Icons.settings,
                     size: 32,
-                    color: Colors.black,
                   ),
                 ),
               ),

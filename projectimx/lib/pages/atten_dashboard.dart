@@ -86,13 +86,12 @@ class _AttendanceDashboardState extends State<AttendanceDashboard> {
       appBar: AppBar(
         title: Text(
           'Attendance Dashboard',
-          style: TextStyle(color: Colors.black),
+          style: TextStyle(),
         ),
-        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(Icons.book, color: Colors.black),
+            icon: Icon(Icons.book),
             onPressed: () {
               Navigator.push(
                 context,
